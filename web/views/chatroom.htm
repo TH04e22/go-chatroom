@@ -1,9 +1,44 @@
 <!DOCTYPE html>
 <html>
-    <head>
 
-    </head>
-    <body>
-        
-    </body>
+<head>
+    <title>Chatroom</title>
+    <style>
+        div.message-box {
+            width: auto;
+            height: 475px;
+            margin: 5px 10px;
+            border: 1px #bebcba solid;
+            ;
+            overflow-y: scroll;
+        }
+
+        div.message-control {
+            margin-top: 5px;
+        }
+
+        div.message-control input[type="textarea"] {
+            width: 450px;
+        }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="/assets/js/main.js"></script>
+</head>
+
+<body>
+    <div class="message-box">
+
+    </div>
+    <div class="message-control">
+        User:
+        <input name="userName" type="text" placeholder="your name">
+        Room:
+        <input name="room" type="text" placeholder="room name">
+    </div>
+    <div class="message-control">
+        <input name="message" type="textarea" placeholder="Please input message">
+        <input name="send" type="button" value="Send">
+    </div>
+</body>
+
 </html>
