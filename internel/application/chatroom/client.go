@@ -1,4 +1,4 @@
-package websocket
+package chatroom
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/TH04e22/go-chatroom/config"
 	. "github.com/TH04e22/go-chatroom/internel/utils"
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/websocket"
 )
 
@@ -18,7 +19,7 @@ const (
 	pongWait = 60 * time.Second
 
 	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
+	pingPeriod = (pongWait * 8) / 10
 )
 
 var upgrader = websocket.Upgrader{
@@ -29,8 +30,9 @@ var upgrader = websocket.Upgrader{
 // Client used for get user websocket data and push data
 // to redis list which websocket hub consuming...
 type Client struct {
-	conn  *websocket.Conn
-	close context.CancelFunc
+	conn   *websocket.Conn
+	pubSub *redis.PubSub
+	close  context.CancelFunc
 }
 
 // ReadPump  Read websocket from user websocket
@@ -48,21 +50,20 @@ func (client *Client) ReadPump(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			return
 		default:
 			_, message, err := client.conn.ReadMessage()
 
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					ErrorLog.Printf("websocket client read error: %v", err)
+				} else {
+					DebugLog.Printf("websocket client read error: %v", err)
 				}
-				DebugLog.Printf("websocket client read error: %v", err)
 				client.close()
-				break
 			}
 
 			redisConn.LPush(redisCtx, config.Redis.HubPrefix, message)
-			DebugLog.Printf("websocket client get: %s\n", string(message))
 		}
 	}
 }
@@ -73,18 +74,26 @@ func (client *Client) WritePump(ctx context.Context) {
 		client.conn.Close()
 	}()
 
+	redisChannel := client.pubSub.ChannelSize(10)
 	ticker := time.NewTicker(pingPeriod)
 
 	for {
 		select {
 		case <-ctx.Done():
-			break
+			return
+		case channelMsg := <-redisChannel:
+			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.conn.WriteMessage(websocket.TextMessage, []byte(channelMsg.Payload)); err != nil {
+				ErrorLog.Printf("websocket client write payload error: %v", err)
+				ticker.Stop()
+				client.close()
+			}
 		case <-ticker.C:
 			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				ErrorLog.Printf("websocket client write error: %v", err)
+				ErrorLog.Printf("websocket client write ping message error: %v", err)
+				ticker.Stop()
 				client.close()
-				break
 			}
 		}
 	}
@@ -101,7 +110,9 @@ func ServeWs(w http.ResponseWriter, r *http.Request) {
 
 	InfoLog.Println("Websocket client connect established")
 	ctx, cancel := context.WithCancel(context.Background())
-	client := &Client{conn: conn, close: cancel}
+	client := &Client{conn: conn,
+		pubSub: redisConn.Subscribe(redisCtx, "room:PHP", "room:GO", "room:Javascript"),
+		close:  cancel}
 
 	go client.ReadPump(ctx)
 	go client.WritePump(ctx)

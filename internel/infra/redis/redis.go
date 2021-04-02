@@ -1,4 +1,4 @@
-package websocket
+package infra
 
 import (
 	"context"
@@ -8,17 +8,17 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
-var redisConn *redis.Client
-var redisCtx = context.Background()
+var RedisConn *redis.Client
+var RedisCtx = context.Background()
 
 func init() {
-	redisConn = redis.NewClient(&redis.Options{
+	RedisConn = redis.NewClient(&redis.Options{
 		Addr:     config.Redis.Address,
 		Password: config.Redis.Password,
 		DB:       0,
 	})
 
-	status := redisConn.Ping(redisCtx)
+	status := RedisConn.Ping(RedisCtx)
 	_, err := status.Result()
 
 	if err != nil {
